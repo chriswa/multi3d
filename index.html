@@ -109,6 +109,7 @@ var app = new class App {
 var floor = new class Floor {
 	constructor() {
 		var loader = new THREE.TextureLoader()
+		loader.crossOrigin = ''
 		loader.load('seamless_grass.jpg', texture => {
 			texture.wrapS = THREE.RepeatWrapping;
 			texture.wrapT = THREE.RepeatWrapping;
@@ -127,6 +128,7 @@ var monster = new class Monster {
 	constructor() {
 		var mixer  = new THREE.AnimationMixer( app.scene )
 		var loader = new THREE.JSONLoader();
+		loader.crossOrigin = ''
 		loader.load('monster.js', function (geometry, materials) {
 
 			geometry.translate( -750, 1000, 0 )
