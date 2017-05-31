@@ -1,0 +1,166 @@
+<!doctype html>
+<title>3dMultiplayer POC</title>
+<script src="https://unpkg.com/three"></script>
+<script src="https://unpkg.com/lodash"></script>
+<body style="margin: 0; overflow: hidden;"></body>
+<script>
+
+// https://p3d.in/v5JcV
+// https://p3d.in/static/uploads/4992/tex-f188649023.jpg
+// https://p3d.in/static/uploads/4992/032d0v5JcV.p3d.r48.js
+//   {"materials": [], "buffers": "032d0v5JcV.p3d.r48.bin", "metadata": {"uvs": 810, "generatedBy": "JS OBJConverter", "sourceFile": ".obj", "vertices": 894, "formatVersion": 3, "materials": 0, "normals": 1249, "faces": 1001}}
+// https://p3d.in/static/uploads/4992//032d0v5JcV.p3d.r48.bin
+
+class PointerLock {
+	constructor(domElement) {
+		this.domElement = domElement
+
+		this.isLocked = false
+
+		var onPointerLockChange = event => {
+			this.isLocked = false
+			if ( document.pointerLockElement === this.domElement || document.mozPointerLockElement === this.domElement || document.webkitPointerLockElement === this.domElement ) {
+				this.isLocked = true;
+			}
+		}
+
+		// Hook pointer lock state change events
+		document.addEventListener( 'pointerlockchange', onPointerLockChange, false );
+		document.addEventListener( 'mozpointerlockchange', onPointerLockChange, false );
+		document.addEventListener( 'webkitpointerlockchange', onPointerLockChange, false );
+
+	}
+	lock() {
+		if (!this.isLocked) {
+			this.domElement.requestPointerLock = this.domElement.requestPointerLock || this.domElement.mozRequestPointerLock || this.domElement.webkitRequestPointerLock;
+			this.domElement.requestPointerLock();
+		}
+	}
+	release() {
+		if (this.isLocked) {
+			document.exitPointerLock = document.exitPointerLock || document.mozExitPointerLock || document.webkitExitPointerLock;
+			document.exitPointerLock();
+		}
+	}
+}
+
+var app = new class App {
+	constructor() {
+		this.initUpdateLoop()
+		this.initThree()
+		this.pointer = new PointerLock(this.renderer.domElement)
+
+		this.renderer.domElement.addEventListener( 'mousedown', event => { this.pointer.lock() })
+		this.renderer.domElement.addEventListener( 'mouseup', event => { this.pointer.release() })
+		this.renderer.domElement.addEventListener( 'mousemove', event => {
+			if ( this.pointer.isLocked ) {
+				this.cameraPivot.rotation.z += 0.002 * (event.movementX || event.mozMovementX || event.webkitMovementX || 0)
+				this.cameraPivot.rotation.y += 0.002 * (event.movementY || event.mozMovementY || event.webkitMovementY || 0)
+				this.cameraPivot.rotation.x = 0
+				this.cameraPivot.rotation.y = _.clamp(this.cameraPivot.rotation.y, -.8, .5)
+			}
+		})
+		this.renderer.domElement.addEventListener( 'wheel', event => {
+			this.camera.position.x -= 0.02 * event.deltaY
+			this.camera.position.z += 0.05 * event.deltaY
+		})
+	}
+	initThree() {
+		this.clock = new THREE.Clock()
+
+		this.scene = new THREE.Scene()
+
+		var ambient = new THREE.AmbientLight(0xcccccc);
+		this.scene.add(ambient);
+		//var pointLight = new THREE.PointLight( 0xff4400, 5, 30 );
+		//pointLight.rotation.set(Math.PI, Math.PI, Math.PI)
+		//pointLight.position.set( 5, 1, 1 );
+		//this.scene.add( pointLight );
+
+		this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 10000)
+		this.cameraPivot = new THREE.Object3D();
+		this.cameraPivot.add( this.camera );
+		this.cameraPivot.rotation.order = "ZYX"
+		this.scene.add(this.cameraPivot)
+		this.camera.position.set(-20, 5, 50)
+		this.camera.up = new THREE.Vector3(0,0,1)
+		this.camera.lookAt(new THREE.Vector3(30,5,0))
+
+		this.renderer = new THREE.WebGLRenderer()
+		this.renderer.setSize(window.innerWidth, window.innerHeight)
+
+		document.body.appendChild(this.renderer.domElement)
+	}
+	initUpdateLoop() {
+		this.updateListeners = []
+		this.onAnimationFrame = this.onAnimationFrame.bind(this)
+		requestAnimationFrame(this.onAnimationFrame)
+	}
+	addUpdateListener(listener) {
+		this.updateListeners.push(listener)
+	}
+	onAnimationFrame() {
+		requestAnimationFrame(this.onAnimationFrame)
+		_.each(this.updateListeners, updateListener => { updateListener() })
+		this.renderer.render(this.scene, this.camera)
+	}
+}
+
+var floor = new class Floor {
+	constructor() {
+		var loader = new THREE.TextureLoader()
+		loader.load('seamless_grass.jpg', texture => {
+			texture.wrapS = THREE.RepeatWrapping;
+			texture.wrapT = THREE.RepeatWrapping;
+			texture.repeat.set( 100, 100 );
+			var material = new THREE.MeshBasicMaterial({ map: texture })
+			var geometry = new THREE.PlaneGeometry( 20000, 20000 );
+			var mesh     = new THREE.Mesh(geometry, material)
+			//mesh.rotation.set(0, 0, 0)
+			app.scene.add(mesh)
+		})
+	}
+}
+
+
+var monster = new class Monster {
+	constructor() {
+		var mixer  = new THREE.AnimationMixer( app.scene )
+		var loader = new THREE.JSONLoader();
+		loader.load('monster.js', function (geometry, materials) {
+
+			geometry.translate( -750, 1000, 0 )
+
+			var material = materials[ 0 ];
+			material.morphTargets = true;
+			material.color.setHex( 0x9999ff );
+
+			var mesh = new THREE.Mesh( geometry, materials )
+			mesh.rotation.set(Math.PI / 2, 0, 0)
+			mesh.position.set( -20, 0, 0 );
+			mesh.scale.set( 0.02, 0.02, 0.02)
+			//app.scene.add( mesh )
+
+			// center!
+			var pivot = new THREE.Group();
+			app.scene.add( pivot );
+			pivot.add( mesh );
+
+			// animate!
+			mixer.clipAction( geometry.animations[ 0 ], mesh )
+										.setDuration( 1 )						// one second
+										.startAt( - Math.random() )	// random phase (already running)
+										.play();										// let's go
+
+			app.addUpdateListener(() => {
+				//pivot.rotation.z += 0.01
+				mixer.update( app.clock.getDelta() )
+			})
+		})
+	}
+
+}
+
+
+
+</script>
