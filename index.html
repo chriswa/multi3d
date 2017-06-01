@@ -20,148 +20,210 @@ class PointerLock {
 		var onPointerLockChange = event => {
 			this.isLocked = false
 			if ( document.pointerLockElement === this.domElement || document.mozPointerLockElement === this.domElement || document.webkitPointerLockElement === this.domElement ) {
-				this.isLocked = true;
+				this.isLocked = true
 			}
 		}
 
 		// Hook pointer lock state change events
-		document.addEventListener( 'pointerlockchange', onPointerLockChange, false );
-		document.addEventListener( 'mozpointerlockchange', onPointerLockChange, false );
-		document.addEventListener( 'webkitpointerlockchange', onPointerLockChange, false );
+		document.addEventListener( 'pointerlockchange', onPointerLockChange, false )
+		document.addEventListener( 'mozpointerlockchange', onPointerLockChange, false )
+		document.addEventListener( 'webkitpointerlockchange', onPointerLockChange, false )
 
 	}
 	lock() {
 		if (!this.isLocked) {
-			this.domElement.requestPointerLock = this.domElement.requestPointerLock || this.domElement.mozRequestPointerLock || this.domElement.webkitRequestPointerLock;
-			this.domElement.requestPointerLock();
+			this.domElement.requestPointerLock = this.domElement.requestPointerLock || this.domElement.mozRequestPointerLock || this.domElement.webkitRequestPointerLock
+			this.domElement.requestPointerLock()
 		}
 	}
 	release() {
 		if (this.isLocked) {
-			document.exitPointerLock = document.exitPointerLock || document.mozExitPointerLock || document.webkitExitPointerLock;
-			document.exitPointerLock();
+			document.exitPointerLock = document.exitPointerLock || document.mozExitPointerLock || document.webkitExitPointerLock
+			document.exitPointerLock()
 		}
 	}
 }
 
-var app = new class App {
+class View {
 	constructor() {
-		this.initUpdateLoop()
-		this.initThree()
-		this.pointer = new PointerLock(this.renderer.domElement)
-
-		this.renderer.domElement.addEventListener( 'mousedown', event => { this.pointer.lock() })
-		this.renderer.domElement.addEventListener( 'mouseup', event => { this.pointer.release() })
-		this.renderer.domElement.addEventListener( 'mousemove', event => {
-			if ( this.pointer.isLocked ) {
-				this.cameraPivot.rotation.z += 0.002 * (event.movementX || event.mozMovementX || event.webkitMovementX || 0)
-				this.cameraPivot.rotation.y += 0.002 * (event.movementY || event.mozMovementY || event.webkitMovementY || 0)
-				this.cameraPivot.rotation.x = 0
-				this.cameraPivot.rotation.y = _.clamp(this.cameraPivot.rotation.y, -.8, .5)
-			}
-		})
-		this.renderer.domElement.addEventListener( 'wheel', event => {
-			this.camera.position.x -= 0.02 * event.deltaY
-			this.camera.position.z += 0.05 * event.deltaY
-		})
+		this.initThreeJS()
+		this.initCamera()
 	}
-	initThree() {
-		this.clock = new THREE.Clock()
-
+	initThreeJS() {
 		this.scene = new THREE.Scene()
 
-		var ambient = new THREE.AmbientLight(0xcccccc);
-		this.scene.add(ambient);
-		//var pointLight = new THREE.PointLight( 0xff4400, 5, 30 );
+		var ambient = new THREE.AmbientLight(0xcccccc)
+		this.scene.add(ambient)
+		//var pointLight = new THREE.PointLight( 0xff4400, 5, 30 )
 		//pointLight.rotation.set(Math.PI, Math.PI, Math.PI)
-		//pointLight.position.set( 5, 1, 1 );
-		//this.scene.add( pointLight );
+		//pointLight.position.set( 5, 1, 1 )
+		//this.scene.add( pointLight )
 
+		this.renderer = new THREE.WebGLRenderer()
+		this.renderer.setSize(window.innerWidth, window.innerHeight)
+		window.addEventListener('resize', () => {
+			console.log('resize')
+			this.renderer.setSize(window.innerWidth, window.innerHeight)
+			this.camera.aspect = window.innerWidth / window.innerHeight
+			this.camera.updateProjectionMatrix()
+		}, false)
+
+		this.domElement = this.renderer.domElement
+
+		document.body.appendChild(this.domElement)
+	}
+	initCamera() {
 		this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 10000)
-		this.cameraPivot = new THREE.Object3D();
-		this.cameraPivot.add( this.camera );
+		this.cameraPivot = new THREE.Object3D()
+		this.cameraPivot.add( this.camera )
 		this.cameraPivot.rotation.order = "ZYX"
 		this.scene.add(this.cameraPivot)
 		this.camera.position.set(-20, 5, 50)
 		this.camera.up = new THREE.Vector3(0,0,1)
 		this.camera.lookAt(new THREE.Vector3(30,5,0))
-
-		this.renderer = new THREE.WebGLRenderer()
-		this.renderer.setSize(window.innerWidth, window.innerHeight)
-
-		document.body.appendChild(this.renderer.domElement)
 	}
-	initUpdateLoop() {
-		this.updateListeners = []
-		this.onAnimationFrame = this.onAnimationFrame.bind(this)
-		requestAnimationFrame(this.onAnimationFrame)
+	onCameraMouseMove(event) {
+		this.cameraPivot.rotation.z += 0.002 * (event.movementX || event.mozMovementX || event.webkitMovementX || 0)
+		this.cameraPivot.rotation.y += 0.002 * (event.movementY || event.mozMovementY || event.webkitMovementY || 0)
+		this.cameraPivot.rotation.x = 0
+		this.cameraPivot.rotation.y = _.clamp(this.cameraPivot.rotation.y, -.8, .5)
 	}
-	addUpdateListener(listener) {
-		this.updateListeners.push(listener)
+	onCameraMouseWheel(event) {
+		this.camera.position.x -= 0.02 * event.deltaY
+		this.camera.position.z += 0.05 * event.deltaY
 	}
-	onAnimationFrame() {
-		requestAnimationFrame(this.onAnimationFrame)
-		_.each(this.updateListeners, updateListener => { updateListener() })
+	render() {
 		this.renderer.render(this.scene, this.camera)
 	}
 }
 
-var floor = new class Floor {
-	constructor() {
-		var loader = new THREE.TextureLoader()
-		loader.crossOrigin = ''
-		loader.load('seamless_grass.jpg', texture => {
-			texture.wrapS = THREE.RepeatWrapping;
-			texture.wrapT = THREE.RepeatWrapping;
-			texture.repeat.set( 100, 100 );
-			var material = new THREE.MeshBasicMaterial({ map: texture })
-			var geometry = new THREE.PlaneGeometry( 20000, 20000 );
-			var mesh     = new THREE.Mesh(geometry, material)
-			//mesh.rotation.set(0, 0, 0)
-			app.scene.add(mesh)
-		})
-	}
-}
-
-
-var monster = new class Monster {
-	constructor() {
-		var mixer  = new THREE.AnimationMixer( app.scene )
-		var loader = new THREE.JSONLoader();
-		loader.crossOrigin = ''
-		loader.load('monster.js', function (geometry, materials) {
-
+const ASSET_LOAD_RULES = {
+	textures: {
+		grass: { loader: THREE.TextureLoader, url: 'seamless_grass.jpg', init: texture => {
+			texture.wrapS = THREE.RepeatWrapping
+			texture.wrapT = THREE.RepeatWrapping
+			texture.repeat.set( 100, 100 ) 
+			return texture
+		}},
+	},
+	models: {
+		monster: { loader: THREE.JSONLoader, url: 'monster.js', init: (geometry, materials) => {
 			geometry.translate( -750, 1000, 0 )
+			materials[ 0 ].morphTargets = true
+			materials[ 0 ].color.setHex( 0x9999ff )
+			return { geometry, materials }
+		}},
+	},
+}
 
-			var material = materials[ 0 ];
-			material.morphTargets = true;
-			material.color.setHex( 0x9999ff );
-
-			var mesh = new THREE.Mesh( geometry, materials )
-			mesh.rotation.set(Math.PI / 2, 0, 0)
-			mesh.position.set( -20, 0, 0 );
-			mesh.scale.set( 0.02, 0.02, 0.02)
-			//app.scene.add( mesh )
-
-			// center!
-			var pivot = new THREE.Group();
-			app.scene.add( pivot );
-			pivot.add( mesh );
-
-			// animate!
-			mixer.clipAction( geometry.animations[ 0 ], mesh )
-										.setDuration( 1 )						// one second
-										.startAt( - Math.random() )	// random phase (already running)
-										.play();										// let's go
-
-			app.addUpdateListener(() => {
-				//pivot.rotation.z += 0.01
-				mixer.update( app.clock.getDelta() )
+class AssetLoader {
+	constructor(assets, onLoadedCallback) {
+		this.assets = assets
+		var loadingManager = new THREE.LoadingManager()
+		_.each(assets, assetLoader)
+		function assetLoader(assetDesc, key, parent) {
+			if (!assetDesc.loader) {
+				_.each(assetDesc, assetLoader) // recurse into nested dicts
+				return
+			}
+			var loaderClass = assetDesc.loader
+			var loader = new loaderClass(loadingManager)
+			loader.crossOrigin = ''
+			loader.load(assetDesc.url, (...results) => {
+				parent[key] = assetDesc.init(...results)
 			})
+		}
+		loadingManager.onLoad = () => {
+			onLoadedCallback(assets)
+		}
+	}
+}
+
+class GameLoop {
+	constructor(renderCallback) {
+		this.renderCallback = renderCallback
+		this.tickListeners = []
+		this.animationFrameHandler = this.animationFrameHandler.bind(this)
+		requestAnimationFrame(this.animationFrameHandler)
+	}
+	onTick(listener) {
+		this.tickListeners.push(listener)
+	}
+	animationFrameHandler() {
+		requestAnimationFrame(this.animationFrameHandler)
+		_.each(this.tickListeners, updateListener => { updateListener() })
+		this.renderCallback()
+	}
+}
+
+var app = new class App {
+	constructor() {
+		this.view = new View()
+		this.clock = new THREE.Clock()
+		this.loop = new GameLoop(() => { this.view.render() })
+
+		// connect view up to mouse events, using pointer lock
+		this.pointer = new PointerLock(this.view.domElement)
+		this.view.domElement.addEventListener('mousedown', event => { this.pointer.lock() })
+		this.view.domElement.addEventListener('mouseup',   event => { this.pointer.release() })
+		this.view.domElement.addEventListener('mousemove', event => { this.pointer.isLocked && this.view.onCameraMouseMove(event) })
+		this.view.domElement.addEventListener('wheel',     event => { this.view.onCameraMouseWheel(event) })
+
+		new AssetLoader(ASSET_LOAD_RULES, assets => {
+			this.assets = assets
+			this.start()
 		})
 	}
 
+	start() {
+		var floor = new Floor(app)
+		var monster = new Monster(app)
+	}
 }
+
+
+class Floor {
+	constructor(app) {
+		var material = new THREE.MeshBasicMaterial({ map: app.assets.textures.grass })
+		var geometry = new THREE.PlaneGeometry( 20000, 20000 )
+		this.mesh    = new THREE.Mesh(geometry, material)
+		app.view.scene.add(this.mesh)
+	}
+}
+
+
+
+class Monster {
+	constructor(app) {
+		this.mixer  = new THREE.AnimationMixer( app.scene )
+		var monsterAsset = app.assets.models.monster
+
+		this.mesh = new THREE.Mesh( app.assets.models.monster.geometry, app.assets.models.monster.materials )
+		this.mesh.rotation.set(Math.PI / 2, 0, 0)
+		this.mesh.position.set( -20, 0, 0 )
+		this.mesh.scale.set( 0.02, 0.02, 0.02)
+		//app.scene.add( this.mesh )
+
+		// center!
+		this.pivot = new THREE.Group()
+		app.view.scene.add( this.pivot )
+		this.pivot.add( this.mesh )
+
+		// animate!
+		this.mixer.clipAction( app.assets.models.monster.geometry.animations[ 0 ], this.mesh )
+									.setDuration( 1 )						// one second
+									.startAt( - Math.random() )	// random phase (already running)
+									.play()										// let's go
+
+		app.loop.onTick(() => {
+			//this.pivot.rotation.z += 0.01
+			this.mixer.update( app.clock.getDelta() )
+		})
+	}
+}
+
+
+
 
 
 
